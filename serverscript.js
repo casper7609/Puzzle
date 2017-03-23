@@ -331,7 +331,7 @@ handlers.EnchantItem = function (args) {
     server.SubtractUserVirtualCurrency({
         "PlayFabId": currentPlayerId,
         "VirtualCurrency": "GD",
-        "Amount": IPToEnchant
+        "Amount": requiredCoin
     });
     enchantLevel++;
     var enchantSuccessResult = server.UpdateUserInventoryItemCustomData({
