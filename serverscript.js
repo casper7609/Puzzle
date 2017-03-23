@@ -341,24 +341,6 @@ handlers.EnchantItem = function (args) {
     });
     return {};
 };
-handlers.EquipItem = function (args) {
-    var itemSwapInfos = JSON.parse(args.ItemSwapInfo);
-    for (var i = 0; i < itemSwapInfos.length; i++) {
-        var itemSwapInfo = itemSwapInfos[i];
-        //unequip
-        if (itemSwapInfo.PrevItemInstanceId != "") {
-            itemSwapInfo.PlayFabId = currentPlayerId;
-            itemSwapInfo.CharacterId = args.CharacterId;
-            handlers.UnEquipItem(itemSwapInfo);
-        }
-        //equip
-        server.MoveItemToCharacterFromUser({
-            "PlayFabId": currentPlayerId,
-            "CharacterId": args.CharacterId,
-            "ItemInstanceId": itemSwapInfo.ItemToEquipInstanceId
-        });
-    }
-};
 handlers.UnEquipItem = function (args) {
     server.MoveItemToUserFromCharacter({
         "PlayFabId": currentPlayerId,
