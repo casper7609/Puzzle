@@ -371,7 +371,7 @@ handlers.SummonItem = function (args) {
             {
                 "CatalogVersion": catalogVersion,
                 "PlayFabId": currentPlayerId,
-                "TableId": dropTableId
+                "TableId": "Gotcha"
             }
         );
     if (randomItem.ResultItemId != "Nothing") {
