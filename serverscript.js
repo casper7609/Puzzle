@@ -16,24 +16,24 @@ handlers.PurchaseCharacter = function (args) {
     log.info("ClassStatus " + args.ClassStatus);
     var classType = args.ClassType;
 
-    var gemPrice = args.GemPrice;
-    log.info("gemPrice " + gemPrice);
+    var goldPrice = args.GemPrice;
+    log.info("goldPrice " + goldPrice);
     var allChars = server.GetAllUsersCharacters({
         "PlayFabId": currentPlayerId
     });
     var userInv = server.GetUserInventory({
         "PlayFabId": currentPlayerId
     });
-    var currentGem = userInv.VirtualCurrency.GP;
-    if (currentGem < gemPrice) {
+    var currentGold = userInv.VirtualCurrency.GP;
+    if (currentGold < goldPrice) {
         return { "Error": "Insufficient Gem" };
     }
-    if (gemPrice > 0) {
+    if (goldPrice > 0) {
         server.SubtractUserVirtualCurrency(
             {
                 "PlayFabId": currentPlayerId,
                 "VirtualCurrency": "GP",
-                "Amount": gemPrice
+                "Amount": goldPrice
             }
         );
     }
@@ -323,16 +323,23 @@ handlers.EnchantItem = function (args) {
         log.info("Insufficient Fund");
         return { "Error": "Insufficient Fund" };
     }
-    server.ConsumeItem({
-        "PlayFabId": currentPlayerId,
-        "ItemInstanceId": itemToEnchant.ItemInstanceId,
-        "ConsumeCount": requiredCard
-    });
-    server.SubtractUserVirtualCurrency({
-        "PlayFabId": currentPlayerId,
-        "VirtualCurrency": "GD",
-        "Amount": requiredCoin
-    });
+    if (requiredCard > 0)
+    {
+        server.ConsumeItem({
+            "PlayFabId": currentPlayerId,
+            "ItemInstanceId": itemToEnchant.ItemInstanceId,
+            "ConsumeCount": requiredCard
+        });
+    }
+    if (requiredCoin > 0)
+    {
+        server.SubtractUserVirtualCurrency({
+            "PlayFabId": currentPlayerId,
+            "VirtualCurrency": "GD",
+            "Amount": requiredCoin
+        });
+    }
+    
     enchantLevel++;
     var enchantSuccessResult = server.UpdateUserInventoryItemCustomData({
         PlayFabId: currentPlayerId,
@@ -341,233 +348,35 @@ handlers.EnchantItem = function (args) {
     });
     return {};
 };
-handlers.UnEquipItem = function (args) {
-    server.MoveItemToUserFromCharacter({
-        "PlayFabId": currentPlayerId,
-        "CharacterId": args.CharacterId,
-        "ItemInstanceId": args.PrevItemInstanceId
-    });
-};
-handlers.InAppPurchase = function (args) {
-    if (args.ItemId == "lvluppackage") {
-        var UpdateUserReadOnlyDataRequest = {
-            "PlayFabId": currentPlayerId,
-            "Data": {}
-        };
-        UpdateUserReadOnlyDataRequest.Data[LVL_UP_PAC] = JSON.stringify({ "TransactionId": args.TransactionId });
-        server.UpdateUserReadOnlyData(UpdateUserReadOnlyDataRequest);
-        var curHighestLevel = GetHigestLevel();
-        checkLevelUpPackage(curHighestLevel);
-    }
-    else if (args.ItemId == "monthlypackage") {
-        var monUpdateUserReadOnlyDataRequest = {
-            "PlayFabId": currentPlayerId,
-            "Data": {}
-        };
-        monUpdateUserReadOnlyDataRequest.Data[MON_SUB_PAC] = JSON.stringify({
-            "TransactionId": args.TransactionId,
-            "Date": 1,
-            "NextTime": getKoreanTomorrow()
-        });
-        GrantItems(currentPlayerId, "GP100", "30일 패키지 보상입니다. ( " + 0 + "일)");
-        server.UpdateUserReadOnlyData(monUpdateUserReadOnlyDataRequest);
-    }
-};
-handlers.CheckMonthlySubscription = function (args) {
-    var getUserReadOnlyDataResponse = server.GetUserReadOnlyData({
-        "PlayFabId": currentPlayerId,
-        "Keys": [MON_SUB_PAC]
-    });
-    var tracker = {};
-    if (getUserReadOnlyDataResponse.Data.hasOwnProperty(MON_SUB_PAC)) {
-        tracker = JSON.parse(getUserReadOnlyDataResponse.Data[MON_SUB_PAC].Value);
-        var UpdateUserReadOnlyDataRequest = {
-            "PlayFabId": currentPlayerId,
-            "Data": {}
-        };
-        if (tracker.Date >= 30) {
-            //delete
-            UpdateUserReadOnlyDataRequest.KeysToRemove = [MON_SUB_PAC];
-        }
-        else//check time
-        {
-            var currentTime = new Date().getTime();
-            //after one day
-            if (tracker.NextTime < currentTime) {
-                GrantItems(currentPlayerId, "GP300", "30일 패키지 보상입니다. (" + tracker.Date + " 일)");
-                tracker.NextTime = getKoreanTomorrow();
-                tracker.Date++;
-                if (tracker.Date >= 30) {
-                    UpdateUserReadOnlyDataRequest.KeysToRemove = [MON_SUB_PAC];
-                }
-                else {
-                    UpdateUserReadOnlyDataRequest.Data[MON_SUB_PAC] = JSON.stringify(tracker);
-                }
-            }
-        }
-        server.UpdateUserReadOnlyData(UpdateUserReadOnlyDataRequest);
-    }
-};
-function getKoreanTomorrow() {
-    var currentDate = new Date();
-    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    currentDate.setUTCHours(15, 0, 0, 0);
-    return currentDate.getTime();
-}
-function checkLevelUpPackage(curHighestLevel) {
-    var getUserReadOnlyDataResponse = server.GetUserReadOnlyData({
-        "PlayFabId": currentPlayerId,
-        "Keys": [LVL_UP_PAC]
-    });
-    var tracker = {};
-    if (!getUserReadOnlyDataResponse.Data.hasOwnProperty(LVL_UP_PAC)) {
-        return;
-    }
-    else {
-        tracker = JSON.parse(getUserReadOnlyDataResponse.Data[LVL_UP_PAC].Value);
-
-        var lvlFrom = 1;
-        if (tracker.Level != null) {
-            lvlFrom = tracker.Level;
-        }
-        for (var i = lvlFrom; i < curHighestLevel; i++) {
-            GrantItems(currentPlayerId, "GP200", "Lv." + i + " 레벨업 패키지 보상입니다.");
-        }
-
-        tracker.Level = curHighestLevel;
-        var UpdateUserReadOnlyDataRequest = {
-            "PlayFabId": currentPlayerId,
-            "Data": {}
-        };
-        UpdateUserReadOnlyDataRequest.Data[LVL_UP_PAC] = JSON.stringify(tracker);
-        server.UpdateUserReadOnlyData(UpdateUserReadOnlyDataRequest);
-    }
-}
-function GrantItems(userId, items, annotation) {
-    log.info("Granting: " + items);
-    var parsed = Array.isArray(items) ? items : [items];
-
-    var GrantItemsToUserRequest = {
-        "CatalogVersion": catalogVersion,
-        "PlayFabId": userId,
-        "ItemIds": parsed,
-        "Annotation": annotation
-    };
-
-    var grantItemsToUserResult = server.GrantItemsToUser(GrantItemsToUserRequest);
-
-    log.info("Item Granted: " + JSON.stringify(grantItemsToUserResult));
-    for (var i = 0; i < grantItemsToUserResult.ItemGrantResults.length; i++)
-    {
-        log.info("Item ID: " + grantItemsToUserResult.ItemGrantResults[i].ItemInstanceId);
-        var updateReasonResult = server.UpdateUserInventoryItemCustomData({
-            PlayFabId: userId,
-            ItemInstanceId: grantItemsToUserResult.ItemGrantResults[i].ItemInstanceId,
-            Data: { "Reason": annotation },
-        });
-    }
-
-    return JSON.stringify(grantItemsToUserResult.ItemGrantResults);
-}
-handlers.GetServerTime = function (args)
-{
-    return { "Time" : new Date().getTime()};
-};
-handlers.RewardQuest = function (args) {
-    var userData = server.GetUserData(
-         {
-             "PlayFabId": currentPlayerId,
-             "Keys": [
-                 "DailyQuest"
-             ]
-         }
-     );
-    var dailyQuestSet = JSON.parse(userData.Data.DailyQuest.Value.replace(/\\/g, ""));
-    var quest = null;
-    for (var i = 0; i < dailyQuestSet.Quests.length; i++) {
-        if (dailyQuestSet.Quests[i].QuestType == args.QuestType) {
-            quest = dailyQuestSet.Quests[i];
-            break;
-        }
-    }
-    quest.HasReceivedReward = true;
-    server.AddUserVirtualCurrency(
-        {
-            "PlayFabId": currentPlayerId,
-            "VirtualCurrency": quest.QuestReward.QuestRewardType,
-            "Amount": parseInt(quest.QuestReward.Count)
-        }
-    );
-    var commitData = {};
-    commitData["DailyQuest"] = JSON.stringify(dailyQuestSet);
-    server.UpdateUserData(
-		{
-		    "PlayFabId": currentPlayerId,
-		    "Data": commitData
-		}
-	);
-    return {};
-};
 handlers.SummonItem = function (args) {
-    log.info("PlayFabId " + args.PlayFabId);
-
-    var count = args.Count;
-    var gemPrice = count == 11 ? 3000 : 300;
-    var dropTableId = "Gotcha" + args.DropTableId;
-
-    log.info("gemPrice " + gemPrice);
-
+    var goldPrice = 1000;
     var userInv = server.GetUserInventory({
         "PlayFabId": currentPlayerId
     });
-    var currentGem = userInv.VirtualCurrency.GP;
-    if (currentGem < gemPrice) {
+    var currentGold = userInv.VirtualCurrency.GD;
+    if (currentGold < goldPrice) {
         return { "Error": "Insufficient Gem" };
     }
-    if (gemPrice > 0) {
+    if (goldPrice > 0) {
         server.SubtractUserVirtualCurrency(
             {
                 "PlayFabId": currentPlayerId,
-                "VirtualCurrency": "GP",
-                "Amount": gemPrice
+                "VirtualCurrency": "GD",
+                "Amount": goldPrice
             }
         );
     }
     var items = [];
-    for (var i = 0; i < count; i++) {
-        var randomItem = server.EvaluateRandomResultTable(
+    var randomItem = server.EvaluateRandomResultTable(
             {
                 "CatalogVersion": catalogVersion,
                 "PlayFabId": currentPlayerId,
                 "TableId": dropTableId
             }
         );
-        if (randomItem.ResultItemId != "Nothing") {
-            log.info("item " + JSON.stringify(randomItem));
-            items.push(randomItem.ResultItemId);
-        }
-    }
-    if (count == 11) {
-        var hasAnyAboveFour = false;
-        for (var i = 0; i < items.length; i++) {
-            var _str = items[i];
-            var str = _str.substr(_str.length - 2, 1);
-            if (parseInt(str) >= 4) {
-                hasAnyAboveFour = true;
-                break;
-            }
-        }
-        if (!hasAnyAboveFour) {
-            var randomItem = server.EvaluateRandomResultTable(
-                {
-                    "CatalogVersion": catalogVersion,
-                    "PlayFabId": currentPlayerId,
-                    "TableId": (dropTableId + "Bonus")
-                }
-            );
-            items.pop();
-            items.push(randomItem.ResultItemId);
-        }
+    if (randomItem.ResultItemId != "Nothing") {
+        log.info("item " + JSON.stringify(randomItem));
+        items.push(randomItem.ResultItemId);
     }
     var realItems = [];
     var itemGrantResult = server.GrantItemsToUser(
@@ -581,103 +390,4 @@ handlers.SummonItem = function (args) {
     var result = {};
     result.Items = realItems;
     return result;
-};
-handlers.MassiveSoul = function (args) {
-    var gemPrice = parseInt(args.Gem);
-    var multiplier = 10;
-    if (gemPrice == 0)
-    {
-        multiplier = 10;
-    }
-    else if (gemPrice == 50) {
-        multiplier = 100;
-    }
-    else
-    {
-        multiplier = 0;
-    }
-    var dungeonLevel = parseInt(args.DungeonLevel) + 1;
-    var sl = Math.floor(slDefault * Math.pow(1.2, dungeonLevel)) * multiplier;
-    if (gemPrice > 0)
-    {
-        server.SubtractUserVirtualCurrency(
-            {
-                "PlayFabId": currentPlayerId,
-                "VirtualCurrency": "GP",
-                "Amount": gemPrice
-            }
-        );
-    }
-    
-    server.AddUserVirtualCurrency(
-        {
-            "PlayFabId": currentPlayerId,
-            "VirtualCurrency": "SL",
-            "Amount": sl
-        }
-    );
-};
-handlers.ReturnToFirstTown = function (args)
-{
-    var gem = parseInt(args.Gem);
-    var dungeonLevel = parseInt(args.DungeonLevel);
-    var townLevel = parseInt(args.TownLevel);
-    var amplifier = Math.floor(townLevel * 100 + (dungeonLevel + 1));
-    var lp = Math.floor(lpDefault * Math.pow(1.2, amplifier));
-
-    var userInventory = server.GetUserInventory({
-        "PlayFabId": currentPlayerId
-    });
-    var sl = userInventory.VirtualCurrency.SL;
-    if (sl > 0)
-    {
-        server.SubtractUserVirtualCurrency(
-            {
-                "PlayFabId": currentPlayerId,
-                "VirtualCurrency": "SL",
-                "Amount": sl
-            }
-        );
-    }
-    
-    if (gem == 0)
-    {
-    }
-    else
-    {
-        server.SubtractUserVirtualCurrency(
-            {
-                "PlayFabId": currentPlayerId,
-                "VirtualCurrency": "GP",
-                "Amount": gem
-            }
-        );
-        lp = Math.floor(lp * 2);
-    }
-    server.AddUserVirtualCurrency(
-        {
-            "PlayFabId": currentPlayerId,
-            "VirtualCurrency": "LP",
-            "Amount": lp
-        }
-    );
-    
-    server.UpdateUserData(
-		{
-		    "PlayFabId": currentPlayerId,
-		    "Data": {"DungeonLevel":0,"TownLevel":0}
-		}
-	);
-    var allCharacters = server.GetAllUsersCharacters({
-        "PlayFabId": currentPlayerId
-    });
-    for (var i = 0; i < allCharacters.Characters.length; i++) {
-        var characterId = allCharacters.Characters[i].CharacterId;
-        server.UpdateCharacterData({
-            "PlayFabId": currentPlayerId,
-            "CharacterId": characterId,
-            "Data": { "SoulAttackLevel": 0, "SoulHitPointLevel": 0 }
-        });
-    }
-   
 };
